@@ -12,9 +12,9 @@ CRON_FILE="/etc/crontabs/root"
 main() {
     local method
     
-    # 读取输入
-    json_load "$1"
-    json_get_var method method
+    # 读取输入（rpcd 新协议：$1=方法名  $2=参数 JSON）
+    [ -n "$2" ] && json_load "$2"
+    [ -n "$1" ] && method="$1"
     
     case "$method" in
         status)
@@ -202,4 +202,22 @@ reload_service() {
 }
 
 # 执行主函数
-main "$@"
+# rpcd 的调用约定：`<脚本> list` 列出方法，`<脚本> call <method> <json>` 执行。
+# 原脚本直接 main "$@"，没有 list 入口，rpcd 就注册不到任何方法 → Method not found。
+case "$1" in
+list)
+    json_init
+    json_add_object "status";    json_close_object
+    json_add_object "task_list"; json_close_object
+    json_add_object "start";     json_close_object
+    json_add_object "stop";      json_close_object
+    json_add_object "restart";   json_close_object
+    json_add_object "reload";    json_close_object
+    json_dump
+    ;;
+call)
+    _args="$3"
+    [ -z "$_args" ] && _args="$(cat)"
+    main "$2" "$_args"
+    ;;
+esac
