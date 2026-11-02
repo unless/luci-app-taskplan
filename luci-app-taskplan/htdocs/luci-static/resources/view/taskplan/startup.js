@@ -5,12 +5,32 @@
 'require uci';
 'require rpc';
 
-var callExec = rpc.declare({
-    object: 'luci',
-    method: 'exec',
-    params: ['command'],
-    expect: { result: 0 }
+var callSync = rpc.declare({
+    object: 'luci.taskplan',
+    method: 'restart',
+    params: [],
+    expect: {}
 });
+
+/* 新版 LuCI 的 form.js / luci.js 里已经没有 m.on_after_apply 这个符号，
+   保存后不会自动调后端。挂到 ui.changes.apply（"保存并应用"的唯一出口），
+   落盘后触发一次重新生成，幂等，重复调用无副作用。 */
+if (!ui.changes.__taskplanSync) {
+    var _apply = ui.changes.apply;
+
+    ui.changes.apply = function() {
+        var ret = _apply.apply(this, arguments);
+
+        window.setTimeout(function() {
+            callSync().then(function() {
+                ui.addNotification(null, E('p', {}, _('Tasks updated')));
+            }).catch(function() {});
+        }, 400);
+
+        return ret;
+    };
+    ui.changes.__taskplanSync = true;
+}
 
 return view.extend({
     load: function() {
@@ -67,7 +87,8 @@ return view.extend({
         stype.value(14, _('Scheduled Wifidown'));
         stype.value(12, _('Scheduled Customscript'));
         stype.value(15, _('Scheduled Customscript2'));
-        stype.default = 12;
+        stype.default = '12';
+        stype.rmempty = false;
 
         var delay = ls.option(form.Value, 'delay', _('Delayed Start(seconds)'));
         delay.description = _('Seconds to wait after boot before execution');
@@ -77,7 +98,7 @@ return view.extend({
 
         m.apply_on_parse = true;
         m.on_after_apply = function() {
-            return callExec('/etc/init.d/taskplan start').then(function() {
+            return callSync().then(function() {
                 ui.addNotification(null, E('p', {}, _('Tasks updated')));
             });
         };
