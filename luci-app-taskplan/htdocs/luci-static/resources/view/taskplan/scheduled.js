@@ -5,12 +5,32 @@
 'require uci';
 'require rpc';
 
-var callExec = rpc.declare({
-    object: 'luci',
-    method: 'exec',
-    params: ['command'],
-    expect: { result: 0 }
+var callSync = rpc.declare({
+    object: 'luci.taskplan',
+    method: 'restart',
+    params: [],
+    expect: {}
 });
+
+/* 新版 LuCI 的 form.js / luci.js 里已经没有 m.on_after_apply 这个符号，
+   保存后不会自动调后端。挂到 ui.changes.apply（"保存并应用"的唯一出口），
+   落盘后触发一次重新生成，幂等，重复调用无副作用。 */
+if (!ui.changes.__taskplanSync) {
+    var _apply = ui.changes.apply;
+
+    ui.changes.apply = function() {
+        var ret = _apply.apply(this, arguments);
+
+        window.setTimeout(function() {
+            callSync().then(function() {
+                ui.addNotification(null, E('p', {}, _('Tasks updated')));
+            }).catch(function() {});
+        }, 400);
+
+        return ret;
+    };
+    ui.changes.__taskplanSync = true;
+}
 
 return view.extend({
     load: function() {
@@ -66,7 +86,10 @@ return view.extend({
         stype.value(14, _('Scheduled Wifidown'));
         stype.value(12, _('Scheduled Customscript'));
         stype.value(15, _('Scheduled Customscript2'));
-        stype.default = 1;
+        stype.default = '1';
+        // 关键：新版 LuCI 的 parse() 会把「值 == default」当成没填而删掉该 option，
+        // 关掉 rmempty 才能让选中值真正落盘
+        stype.rmempty = false;
 
         var month = ss.option(form.Value, 'month', _('Month(0~11)'));
         month.rmempty = false;
@@ -100,7 +123,7 @@ return view.extend({
 
         m.apply_on_parse = true;
         m.on_after_apply = function() {
-            return callExec('/etc/init.d/taskplan start').then(function() {
+            return callSync().then(function() {
                 ui.addNotification(null, E('p', {}, _('Tasks updated')));
             });
         };
