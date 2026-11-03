@@ -12,28 +12,24 @@ var callSync = rpc.declare({
     expect: {}
 });
 
-function taskplanSync() {
-    try {
-        if (window.fetch && window.JSON)
-            return fetch('/ubus', {
-                method: 'POST',
-                keepalive: true,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0',
-                    id: 1,
-                    method: 'call',
-                    params: [L.env.sessionid, 'luci.taskplan', 'restart', {}]
-                })
+/* 新版 LuCI 的 form.js / luci.js 里已经没有 m.on_after_apply 这个符号，
+   保存后不会自动调后端。挂到 ui.changes.apply（"保存并应用"的唯一出口），
+   落盘后触发一次重新生成，幂等，重复调用无副作用。 */
+if (!ui.changes.__taskplanSync) {
+    var _apply = ui.changes.apply;
+
+    ui.changes.apply = function() {
+        var ret = _apply.apply(this, arguments);
+
+        window.setTimeout(function() {
+            callSync().then(function() {
+                ui.addNotification(null, E('p', {}, _('Tasks updated')));
             }).catch(function() {});
-    } catch (e) {}
+        }, 400);
 
-    return callSync().catch(function() {});
-}
-
-if (!window.__taskplanSync) {
-    document.addEventListener('uci-applied', taskplanSync);
-    window.__taskplanSync = true;
+        return ret;
+    };
+    ui.changes.__taskplanSync = true;
 }
 
 return view.extend({
@@ -91,6 +87,8 @@ return view.extend({
         stype.value(12, _('Scheduled Customscript'));
         stype.value(15, _('Scheduled Customscript2'));
         stype.default = '1';
+        // 关键：新版 LuCI 的 parse() 会把「值 == default」当成没填而删掉该 option，
+        // 关掉 rmempty 才能让选中值真正落盘
         stype.rmempty = false;
 
         var month = ss.option(form.Value, 'month', _('Month(0~11)'));
