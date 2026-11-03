@@ -23,16 +23,18 @@ run_taskplan()
         uci -q get taskplan.@global[0].customscript2 > /etc/taskplan/taskplancustomscript2 && \
         sed -i 's/\r$//' /etc/taskplan/taskplancustomscript2
     
-    ssum=$(uci -q show taskplan | grep -c "stime\[[0-9]\]" || echo 0)
-    lsum=$(uci -q show taskplan | grep -c "ltime\[[0-9]\]" || echo 0)
+    ssum=$(uci -q show taskplan | grep -c "stime\[[0-9]\]" || true); ssum=${ssum:-0}
+    lsum=$(uci -q show taskplan | grep -c "ltime\[[0-9]\]" || true); lsum=${lsum:-0}
     
     # 清空crontab中的taskplan条目
     sed -i '/taskplanhandler/d' $CR >/dev/null 2>&1
+    sed -i '/^[[:space:]]*$/d' $CR >/dev/null 2>&1 || true
     
     # 处理定时任务
     for i in $(seq 0 $((ssum-1)) 2>/dev/null); do
         enable=$(uci -q get taskplan.@stime[$i].enable)
         if [ "x$enable" = "x1" ]; then
+            cmd=""
             month=$(uci -q get taskplan.@stime[$i].month || echo "*")
             stype=$(uci -q get taskplan.@stime[$i].stype)
             week=$(uci -q get taskplan.@stime[$i].week || echo "*")
@@ -61,7 +63,7 @@ run_taskplan()
                 15) cmd="$minute $hour * $month $week /usr/bin/taskplanhandler customscript2 Scheduled_task" ;;
                 16) cmd="$minute $hour * $month $week /usr/bin/taskplanhandler restartlan Scheduled_task" ;;
             esac
-            echo "$cmd" >> $CR
+            [ -n "$cmd" ] && echo "$cmd" >> $CR
         fi
     done
 
@@ -137,6 +139,7 @@ restart()
 del_cru()
 {   
     sed -i '/taskplanhandler/d' $CR >/dev/null 2>&1 || true
+    sed -i '/^[[:space:]]*$/d' $CR >/dev/null 2>&1 || true
     echo "#!/bin/sh" > $TT  # 清空文件但保留基本结构
     chmod +x $TT
 }
