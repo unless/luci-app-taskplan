@@ -1,16 +1,14 @@
 #
-# Copyright 2019-2026 sirpdboy 
+# Copyright 2019-2026 sirpdboy
 #
 # This is free software, licensed under the Apache License, Version 2.0 .
 #
 
-
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-taskplan
-PKG_VERSION:=3.0.0
+PKG_VERSION:=3.0.1
 PKG_RELEASE:=20260303
-
 
 PKG_LICENSE:=GPL-2.0
 PKG_MAINTAINER:=sirpdboy
@@ -43,3 +41,10 @@ include $(TOPDIR)/feeds/luci/luci.mk
 
 # call BuildPackage - OpenWrt buildroot signature
 
+define Build/Prepare/$(LUCI_NAME)
+	chmod 0755 \
+		$(PKG_BUILD_DIR)/root/usr/libexec/rpcd/luci.taskplan \
+		$(PKG_BUILD_DIR)/root/etc/init.d/taskplan \
+		$(PKG_BUILD_DIR)/root/usr/bin/taskplanhandler \
+		$(PKG_BUILD_DIR)/root/etc/taskplan/taskplanrun
+endef
