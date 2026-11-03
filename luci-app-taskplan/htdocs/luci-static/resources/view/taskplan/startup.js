@@ -12,24 +12,28 @@ var callSync = rpc.declare({
     expect: {}
 });
 
-/* 新版 LuCI 的 form.js / luci.js 里已经没有 m.on_after_apply 这个符号，
-   保存后不会自动调后端。挂到 ui.changes.apply（"保存并应用"的唯一出口），
-   落盘后触发一次重新生成，幂等，重复调用无副作用。 */
-if (!ui.changes.__taskplanSync) {
-    var _apply = ui.changes.apply;
-
-    ui.changes.apply = function() {
-        var ret = _apply.apply(this, arguments);
-
-        window.setTimeout(function() {
-            callSync().then(function() {
-                ui.addNotification(null, E('p', {}, _('Tasks updated')));
+function taskplanSync() {
+    try {
+        if (window.fetch && window.JSON)
+            return fetch('/ubus', {
+                method: 'POST',
+                keepalive: true,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method: 'call',
+                    params: [L.env.sessionid, 'luci.taskplan', 'restart', {}]
+                })
             }).catch(function() {});
-        }, 400);
+    } catch (e) {}
 
-        return ret;
-    };
-    ui.changes.__taskplanSync = true;
+    return callSync().catch(function() {});
+}
+
+if (!window.__taskplanSync) {
+    document.addEventListener('uci-applied', taskplanSync);
+    window.__taskplanSync = true;
 }
 
 return view.extend({
