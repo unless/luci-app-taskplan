@@ -12,28 +12,21 @@ var callSync = rpc.declare({
     expect: {}
 });
 
-function taskplanSync() {
-    try {
-        if (window.fetch && window.JSON)
-            return fetch('/ubus', {
-                method: 'POST',
-                keepalive: true,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0',
-                    id: 1,
-                    method: 'call',
-                    params: [L.env.sessionid, 'luci.taskplan', 'restart', {}]
-                })
+if (!ui.changes.__taskplanSync) {
+    var _apply = ui.changes.apply;
+
+    ui.changes.apply = function() {
+        var ret = _apply.apply(this, arguments);
+
+        window.setTimeout(function() {
+            callSync().then(function() {
+                ui.addNotification(null, E('p', {}, _('Tasks updated')));
             }).catch(function() {});
-    } catch (e) {}
+        }, 400);
 
-    return callSync().catch(function() {});
-}
-
-if (!window.__taskplanSync) {
-    document.addEventListener('uci-applied', taskplanSync);
-    window.__taskplanSync = true;
+        return ret;
+    };
+    ui.changes.__taskplanSync = true;
 }
 
 return view.extend({
